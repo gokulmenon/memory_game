@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Memory Game for Adit</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --secondary: #f5a623;
+            --accent: #7ed321;
+            --danger: #e02020;
+            --dark: #2c3e50;
+            --light: #ecf0f1;
+            --card-back: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --bg-color: #f0f4f8;
+            --font-main: 'Nunito', sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- Header --- */
+        header {
+            background: white;
+            padding: 0.5rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 10;
+            height: 60px;
+            flex-shrink: 0;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 900;
+            font-size: 1.2rem;
+            color: var(--dark);
+        }
+
+        .game-icon-svg {
+            width: 36px;
+            height: 36px;
+        }
+
+        .reset-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.1s;
+            font-family: inherit;
+        }
+
+        .reset-btn:active { transform: scale(0.95); }
+
+        /* --- Status Bar --- */
+        .status-bar {
+            background: var(--dark);
+            color: white;
+            padding: 8px 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            font-weight: 700;
+            height: 40px;
+            flex-shrink: 0;
+        }
+
+        .status-item span { color: var(--secondary); margin-left: 5px; }
+
+        /* --- Game Area --- */
+        #game-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            overflow: hidden;
+            position: relative;
+            width: 100%;
+        }
+
+        .grid-board {
+            display: grid;
+            gap: 8px;
+            width: 100%;
+            height: auto;
+            max-width: 600px;
+            aspect-ratio: 1 / 1; /* Enforces square aspect ratio for the whole board container */
+            margin: auto;
+            /* Grid columns set via JS */
+        }
+
+        /* --- Card Styles --- */
+        .card {
+            background-color: transparent;
+            perspective: 1000px;
+            cursor: pointer;
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 100%; /* forces 1:1 aspect ratio on individual cards */
+        }
+
+        .card.disabled { pointer-events: none; }
+        
+        .card.blocked { 
+            visibility: visible; 
+            pointer-events: none;
+        }
+        
+        .card.blocked .card-inner {
+            background: #dcdcdc;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .card.blocked .card-front, .card.blocked .card-back { display: none; }
+
+        .card-inner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+            border-radius: 12%;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .card.flipped .card-inner { transform: rotateY(180deg); }
+        .card.matched .card-inner { animation: pulse 0.5s ease-in-out; }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            border-radius: 12%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            padding: 5px;
+        }
+
+        .card-front {
+            background-color: white;
+            color: var(--dark);
+            transform: rotateY(180deg);
+            border: 2px solid var(--light);
+            overflow: hidden;
+            line-height: 1.1;
+        }
+
+        /* Bigger text/content on front */
+        .card-front span {
+            display: block;
+            text-align: center;
+        }
+
+        .card-back {
+            background: var(--card-back);
+            color: rgba(255,255,255,0.4); /* Increased opacity for visibility */
+            font-size: 3rem; /* Make ? bigger */
+        }
+
+        /* --- Start Screen --- */
+        #start-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .start-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .form-group { margin-bottom: 1.5rem; text-align: left; }
+        label { display: block; margin-bottom: 0.5rem; color: var(--dark); font-weight: 700; }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--light);
+            border-radius: 10px;
+            font-size: 1rem;
+            font-family: inherit;
+            outline: none;
+            transition: border 0.2s;
+        }
+        input:focus, select:focus { border-color: var(--primary); }
+
+        .start-btn {
+            background: var(--secondary);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            font-weight: 900;
+            cursor: pointer;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(245, 166, 35, 0.4);
+            transition: transform 0.1s;
+        }
+        .start-btn:active { transform: scale(0.98); }
+
+        /* --- Modals --- */
+        .modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 50;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal.active { display: flex; animation: fadeIn 0.3s; }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+            position: relative;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+
+        .modal-title { font-size: 1.5rem; color: var(--primary); margin-bottom: 1rem; }
+        .stats-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 15px; 
+            margin-bottom: 1.5rem;
+            background: var(--bg-color);
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .stat-box { text-align: center; }
+        .stat-val { font-size: 1.5rem; font-weight: 900; color: var(--dark); }
+        .stat-label { font-size: 0.8rem; color: #7f8c8d; }
+        
+        .final-score-badge {
+            background: var(--secondary);
+            color: white;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 900;
+            margin: 0 auto 1rem auto;
+            border: 4px solid white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .action-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .stats-table-container {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { text-align: left; color: var(--primary); padding: 8px; border-bottom: 2px solid var(--light); }
+        td { padding: 8px; border-bottom: 1px solid var(--light); color: var(--dark); }
+        tr:last-child td { border: none; font-weight: 700; background: var(--light); }
+
+        /* --- Animations --- */
+        @keyframes pulse {
+            0% { transform: scale(1) rotateY(180deg); }
+            50% { transform: scale(1.1) rotateY(180deg); }
+            100% { transform: scale(1) rotateY(180deg); }
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Specific Geography Style */
+        .geo-flag { font-size: 1.2em; display: block; }
+        .geo-name { font-size: 0.4em; margin-top: 5px; word-wrap: break-word; line-height: 1.1; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="brand">
+            <!-- Custom SVG Icon matching the description -->
+            <svg class="game-icon-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="5" y="5" width="90" height="90" rx="10" stroke="#2c3e50" stroke-width="8"/>
+                <!-- Vertical divider -->
+                <line x1="50" y1="5" x2="50" y2="95" stroke="#2c3e50" stroke-width="6"/>
+                <!-- Horizontal divider -->
+                <line x1="5" y1="50" x2="95" y2="50" stroke="#2c3e50" stroke-width="6"/>
+                
+                <!-- Top Left: Stripes -->
+                <g clip-path="url(#clipTL)">
+                     <line x1="0" y1="50" x2="50" y2="0" stroke="#2c3e50" stroke-width="6" />
+                     <line x1="15" y1="50" x2="50" y2="15" stroke="#2c3e50" stroke-width="6" />
+                     <line x1="0" y1="35" x2="35" y2="0" stroke="#2c3e50" stroke-width="6" />
+                </g>
+                
+                <!-- Top Right: Check -->
+                <path d="M60 25 L70 35 L85 15" stroke="#2c3e50" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+                
+                <!-- Bottom Left: Check -->
+                <path d="M15 75 L25 85 L40 65" stroke="#2c3e50" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+                
+                <!-- Bottom Right: Stripes -->
+                 <g clip-path="url(#clipBR)">
+                     <line x1="50" y1="100" x2="100" y2="50" stroke="#2c3e50" stroke-width="6" />
+                     <line x1="65" y1="100" x2="100" y2="65" stroke="#2c3e50" stroke-width="6" />
+                     <line x1="50" y1="85" x2="85" y2="50" stroke="#2c3e50" stroke-width="6" />
+                </g>
+                
+                <defs>
+                    <clipPath id="clipTL"><rect x="5" y="5" width="45" height="45" rx="5"/></clipPath>
+                    <clipPath id="clipBR"><rect x="50" y="50" width="45" height="45" rx="5"/></clipPath>
+                </defs>
+            </svg>
+            <span>Memory Game</span>
+        </div>
+        <button class="reset-btn" onclick="game.resetGame()">Reset</button>
+    </header>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-item">Level: <span id="ui-level">1</span></div>
+        <div class="status-item">Time: <span id="ui-time">00:00</span></div>
+        <div class="status-item">Attempts: <span id="ui-attempts">0</span></div>
+    </div>
+
+    <!-- Game Board -->
+    <div id="game-container">
+        <div class="grid-board" id="grid">
+            <!-- Cards generated by JS -->
+        </div>
+    </div>
+
+    <!-- Start Screen Overlay -->
+    <div id="start-overlay">
+        <div class="start-card">
+            <h1 style="color:var(--primary); margin-top:0;">Welcome!</h1>
+            <div class="form-group">
+                <label>Player Name</label>
+                <input type="text" id="player-name" value="Adit" placeholder="Enter name">
+            </div>
+            <div class="form-group">
+                <label>Theme</label>
+                <select id="game-theme">
+                    <option value="emoticons">Emoticons 😀</option>
+                    <option value="math">Math Numbers 🔢</option>
+                    <option value="geography">Geography 🌎</option>
+                    <option value="shapes">Shapes 🔺</option>
+                    <option value="art">Abstract Art 🎨</option>
+                    <option value="animals">Animals 🦁</option>
+                </select>
+            </div>
+            <button class="start-btn" onclick="game.init()">Start Game</button>
+        </div>
+    </div>
+
+    <!-- Level Complete Modal -->
+    <div id="level-modal" class="modal">
+        <div class="modal-content">
+            <div class="final-score-badge" id="level-score">0</div>
+            <h2 class="modal-title" id="level-msg">Level Complete!</h2>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-val" id="level-time">0s</div>
+                    <div class="stat-label">Time</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" id="level-attempts">0</div>
+                    <div class="stat-label">Attempts</div>
+                </div>
+            </div>
+            <button class="action-btn" id="next-level-btn" onclick="game.nextLevel()">Next Level</button>
+            <button class="action-btn" id="show-stats-btn" style="display:none; background-color: var(--secondary);" onclick="game.showFinalStats()">Show Stats</button>
+        </div>
+    </div>
+
+    <!-- Final Stats Modal -->
+    <div id="stats-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2 class="modal-title">Game Statistics</h2>
+            <div class="stats-table-container">
+                <table id="stats-table">
+                    <thead>
+                        <tr>
+                            <th>Lvl</th>
+                            <th>Time</th>
+                            <th>Moves</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stats-body">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="final-score-badge" style="width: 100px; height: 100px; font-size: 2rem;" id="final-avg-score">100</div>
+            <p style="color: #7f8c8d;">Final Average Score</p>
+            <button class="action-btn" onclick="game.resetGame()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        /* --- Game Data Generators --- */
+        const GEOGRAPHY_DATA = [
+            {n:"Afghanistan",f:"🇦🇫"},{n:"Albania",f:"🇦🇱"},{n:"Algeria",f:"🇩🇿"},{n:"Andorra",f:"🇦🇩"},{n:"Angola",f:"🇦🇴"},
+            {n:"Argentina",f:"🇦🇷"},{n:"Armenia",f:"🇦🇲"},{n:"Australia",f:"🇦🇺"},{n:"Austria",f:"🇦🇹"},{n:"Azerbaijan",f:"🇦🇿"},
+            {n:"Bahamas",f:"🇧🇸"},{n:"Bahrain",f:"🇧🇭"},{n:"Bangladesh",f:"🇧🇩"},{n:"Barbados",f:"🇧🇧"},{n:"Belarus",f:"🇧🇾"},
+            {n:"Belgium",f:"🇧🇪"},{n:"Belize",f:"🇧🇿"},{n:"Benin",f:"🇧🇯"},{n:"Bhutan",f:"🇧🇹"},{n:"Bolivia",f:"🇧🇴"},
+            {n:"Bosnia",f:"🇧🇦"},{n:"Botswana",f:"🇧🇼"},{n:"Brazil",f:"🇧🇷"},{n:"Bulgaria",f:"🇧🇬"},{n:"Cambodia",f:"🇰🇭"},
+            {n:"Cameroon",f:"🇨🇲"},{n:"Canada",f:"🇨🇦"},{n:"Chile",f:"🇨🇱"},{n:"China",f:"🇨🇳"},{n:"Colombia",f:"🇨🇴"},
+            {n:"Costa Rica",f:"🇨🇷"},{n:"Croatia",f:"🇭🇷"},{n:"Cuba",f:"🇨🇺"},{n:"Cyprus",f:"🇨🇾"},{n:"Czechia",f:"🇨🇿"},
+            {n:"Denmark",f:"🇩🇰"},{n:"Djibouti",f:"🇩🇯"},{n:"Dominica",f:"🇩🇲"},{n:"Ecuador",f:"🇪🇨"},{n:"Egypt",f:"🇪🇬"},
+            {n:"El Salvador",f:"🇸🇻"},{n:"Estonia",f:"🇪🇪"},{n:"Ethiopia",f:"🇪🇹"},{n:"Fiji",f:"🇫🇯"},{n:"Finland",f:"🇫🇮"},
+            {n:"France",f:"🇫🇷"},{n:"Georgia",f:"🇬🇪"},{n:"Germany",f:"🇩🇪"},{n:"Ghana",f:"🇬🇭"},{n:"Greece",f:"🇬🇷"},
+            {n:"Grenada",f:"🇬🇩"},{n:"Guatemala",f:"🇬🇹"},{n:"Haiti",f:"🇭🇹"},{n:"Honduras",f:"🇭🇳"},{n:"Hungary",f:"🇭🇺"},
+            {n:"Iceland",f:"🇮🇸"},{n:"India",f:"🇮🇳"},{n:"Indonesia",f:"🇮🇩"},{n:"Iran",f:"🇮🇷"},{n:"Iraq",f:"🇮🇶"},
+            {n:"Ireland",f:"🇮🇪"},{n:"Israel",f:"🇮🇱"},{n:"Italy",f:"🇮🇹"},{n:"Jamaica",f:"🇯🇲"},{n:"Japan",f:"🇯🇵"},
+            {n:"Jordan",f:"🇯🇴"},{n:"Kazakhstan",f:"🇰🇿"},{n:"Kenya",f:"🇰🇪"},{n:"Kuwait",f:"🇰🇼"},{n:"Laos",f:"🇱🇦"},
+            {n:"Latvia",f:"🇱🇻"},{n:"Lebanon",f:"🇱🇧"},{n:"Libya",f:"🇱🇾"},{n:"Liechtenstein",f:"🇱🇮"},{n:"Lithuania",f:"🇱🇹"},
+            {n:"Luxembourg",f:"🇱🇺"},{n:"Malaysia",f:"🇲🇾"},{n:"Maldives",f:"🇲🇻"},{n:"Malta",f:"🇲🇹"},{n:"Mexico",f:"🇲🇽"},
+            {n:"Monaco",f:"🇲🇨"},{n:"Mongolia",f:"🇲🇳"},{n:"Montenegro",f:"🇲🇪"},{n:"Morocco",f:"🇲🇦"},{n:"Nepal",f:"🇳🇵"},
+            {n:"Netherlands",f:"🇳🇱"},{n:"New Zealand",f:"🇳🇿"},{n:"Nigeria",f:"🇳🇬"},{n:"North Korea",f:"🇰🇵"},{n:"Norway",f:"🇳🇴"},
+            {n:"Oman",f:"🇴🇲"},{n:"Pakistan",f:"🇵🇰"},{n:"Panama",f:"🇵🇦"},{n:"Paraguay",f:"🇵🇾"},{n:"Peru",f:"🇵🇪"},
+            {n:"Philippines",f:"🇵🇭"},{n:"Poland",f:"🇵🇱"},{n:"Portugal",f:"🇵🇹"},{n:"Qatar",f:"🇶🇦"},{n:"Romania",f:"🇷🇴"},
+            {n:"Russia",f:"🇷🇺"},{n:"Rwanda",f:"🇷🇼"},{n:"Saudi Arabia",f:"🇸🇦"},{n:"Senegal",f:"🇸🇳"},{n:"Serbia",f:"🇷🇸"},
+            {n:"Singapore",f:"🇸🇬"},{n:"Slovakia",f:"🇸🇰"},{n:"Slovenia",f:"🇸🇮"},{n:"Somalia",f:"🇸🇴"},{n:"South Africa",f:"🇿🇦"},
+            {n:"South Korea",f:"🇰🇷"},{n:"Spain",f:"🇪🇸"},{n:"Sri Lanka",f:"🇱🇰"},{n:"Sudan",f:"🇸🇩"},{n:"Sweden",f:"🇸🇪"},
+            {n:"Switzerland",f:"🇨🇭"},{n:"Syria",f:"🇸🇾"},{n:"Taiwan",f:"🇹🇼"},{n:"Tajikistan",f:"🇹🇯"},{n:"Tanzania",f:"🇹🇿"},
+            {n:"Thailand",f:"🇹🇭"},{n:"Tunisia",f:"🇹🇳"},{n:"Turkey",f:"🇹🇷"},{n:"Uganda",f:"🇺🇬"},{n:"Ukraine",f:"🇺🇦"},
+            {n:"UAE",f:"🇦🇪"},{n:"UK",f:"🇬🇧"},{n:"USA",f:"🇺🇸"},{n:"Uruguay",f:"🇺🇾"},{n:"Uzbekistan",f:"🇺🇿"},
+            {n:"Vatican City",f:"🇻🇦"},{n:"Venezuela",f:"🇻🇪"},{n:"Vietnam",f:"🇻🇳"},{n:"Yemen",f:"🇾🇪"},{n:"Zambia",f:"🇿🇲"},{n:"Zimbabwe",f:"🇿🇼"}
+        ];
+
+        /* --- Game Class --- */
+        class MemoryGame {
+            constructor() {
+                this.level = 1;
+                this.maxLevels = 10;
+                this.playerName = "Adit";
+                this.theme = "emoticons";
+                this.gridSize = 2; // Level 1 is 2x2
+                
+                this.cards = [];
+                this.flippedCards = [];
+                this.matchedPairs = 0;
+                this.totalPairs = 0;
+                
+                this.attempts = 0;
+                this.timer = null;
+                this.seconds = 0;
+                this.isLocked = false;
+                
+                this.stats = []; // Stores history {level, time, attempts, score}
+                
+                // DOM Elements
+                this.gridEl = document.getElementById('grid');
+                this.uiLevel = document.getElementById('ui-level');
+                this.uiTime = document.getElementById('ui-time');
+                this.uiAttempts = document.getElementById('ui-attempts');
+                this.startOverlay = document.getElementById('start-overlay');
+                this.levelModal = document.getElementById('level-modal');
+                this.statsModal = document.getElementById('stats-modal');
+
+                // Predefined simple pools
+                this.pools = {
+                    emoticons: ['😀','🚀','🌈','🍕','🦄','🎸','⚽','🚗','🐶','👑','🍦','🎈','🍄','⏰','💡','🎁','📷','🔔','🔥','💎','🧩','🧸','🎵','🍎','✈️','⚓','🦋','🐳','🍀','🌙','🍩','🍟','🚲','🏠','👓','🎩','🌂','🎓','🎱','🎲','🎳','🎮','👾','🤖','🎃','🎄','👻','👽','💍','💄','👠','👢','🧤','🧣','🧥','👖','👕','👔','👗','👙','👘','🎒','🍔','🌭','🥪','🥨','🥞','🥝','🍇','🍉','🍊','🍋','🍌','🍍','🥭','🍑','🍒','🍓','🌽','🥕','🥦','🥨'],
+                    animals: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🕷','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🐘','🦏','🐪','🐫','🦒','🐃'],
+                    shapes: ['★','■','▲','●','◆','⬟','❄','❤','♠','♣','♦','☁','☀','☾','☂','☃','☄','☮','☯','☸','☹','☺','♀','♂','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','♔','♕','♖','♗','♘','♙','♚','♛','♜','♝','♞','♟','⚓','⚒','⚔','⚙','⚗','⚖','⚰','⚱','♿','⚠','⛔','🚫','🚭'],
+                    math: Array.from({length: 100}, (_, i) => i + 1)
+                };
+            }
+
+            init() {
+                this.playerName = document.getElementById('player-name').value || "Adit";
+                this.theme = document.getElementById('game-theme').value;
+                this.startOverlay.style.display = 'none';
+                this.startLevel(1);
+            }
+
+            resetGame() {
+                this.stopTimer();
+                this.stats = [];
+                this.level = 1;
+                this.gridSize = 2;
+                this.levelModal.style.display = 'none';
+                this.statsModal.style.display = 'none';
+                this.startOverlay.style.display = 'flex';
+            }
+
+            startLevel(lvl) {
+                this.level = lvl;
+                this.gridSize = this.level + 1;
+                
+                this.attempts = 0;
+                this.seconds = 0;
+                this.matchedPairs = 0;
+                this.flippedCards = [];
+                this.isLocked = false;
+                
+                this.uiLevel.innerText = this.level;
+                this.uiAttempts.innerText = 0;
+                this.uiTime.innerText = "00:00";
+                
+                this.generateBoard();
+                this.startTimer();
+                
+                this.levelModal.classList.remove('active');
+                this.levelModal.style.display = 'none';
+            }
+
+            generateAbstractArt() {
+                // Generate a random SVG with geometric shapes
+                const colors = ['#e74c3c', '#8e44ad', '#3498db', '#1abc9c', '#f1c40f', '#e67e22', '#2ecc71', '#34495e'];
+                const shapes = [
+                    (c) => `<circle cx="50" cy="50" r="40" fill="${c}" />`,
+                    (c) => `<rect x="10" y="10" width="80" height="80" rx="10" fill="${c}" />`,
+                    (c) => `<polygon points="50,10 90,90 10,90" fill="${c}" />`,
+                    (c) => `<circle cx="50" cy="50" r="30" stroke="${c}" stroke-width="10" fill="none" />`,
+                    (c) => `<rect x="25" y="25" width="50" height="50" transform="rotate(45 50 50)" fill="${c}" />`
+                ];
+                
+                const bg = colors[Math.floor(Math.random() * colors.length)];
+                let fg = colors[Math.floor(Math.random() * colors.length)];
+                while(fg === bg) fg = colors[Math.floor(Math.random() * colors.length)];
+                
+                const shapeFn = shapes[Math.floor(Math.random() * shapes.length)];
+                
+                return `<svg viewBox="0 0 100 100" style="width:100%; height:100%;"><rect width="100" height="100" fill="${bg}20"/>${shapeFn(fg)}</svg>`;
+            }
+
+            getContentForTheme(count) {
+                if (this.theme === 'geography') {
+                    // Random shuffle full data then slice
+                    const shuffled = [...GEOGRAPHY_DATA].sort(() => 0.5 - Math.random());
+                    return shuffled.slice(0, count).map(c => 
+                        `<span class="geo-flag" style="font-size:3.5em; line-height:1;">${c.f}</span><div class="geo-name" style="font-size:0.8em; margin-top:5px;">${c.n}</div>`
+                    );
+                } else if (this.theme === 'art') {
+                    const art = [];
+                    for(let i=0; i<count; i++) art.push(this.generateAbstractArt());
+                    return art;
+                } else {
+                    const pool = this.pools[this.theme];
+                    // Ensure we loop if pool is smaller than count (rare for high levels but safe)
+                    let selection = [];
+                    // Randomize pool first
+                    const randomizedPool = [...pool].sort(() => 0.5 - Math.random());
+                    
+                    let i = 0;
+                    while(selection.length < count) {
+                        selection.push(randomizedPool[i % randomizedPool.length]);
+                        i++;
+                    }
+                    
+                    // Add styling for large text
+                    return selection.map(item => `<span style="font-size:3.5em;">${item}</span>`);
+                }
+            }
+
+            generateBoard() {
+                this.gridEl.innerHTML = '';
+                const totalCells = this.gridSize * this.gridSize;
+                let playableCells = totalCells;
+                let blockedIndex = -1;
+
+                if (totalCells % 2 !== 0) {
+                    playableCells = totalCells - 1;
+                    blockedIndex = Math.floor(Math.random() * totalCells);
+                }
+
+                this.totalPairs = playableCells / 2;
+                
+                // Get pairs
+                const uniqueContent = this.getContentForTheme(this.totalPairs);
+                
+                let deck = [...uniqueContent, ...uniqueContent];
+                deck.sort(() => 0.5 - Math.random());
+
+                // CSS Grid Columns
+                this.gridEl.style.gridTemplateColumns = `repeat(${this.gridSize}, 1fr)`;
+
+                // Dynamic sizing for text based on grid density
+                let baseSize = 1;
+                if(this.gridSize <= 3) baseSize = 1.2;
+                if(this.gridSize >= 6) baseSize = 0.7;
+                if(this.gridSize >= 8) baseSize = 0.5;
+
+                let deckIndex = 0;
+                for (let i = 0; i < totalCells; i++) {
+                    const card = document.createElement('div');
+                    card.classList.add('card');
+                    card.dataset.index = i;
+
+                    if (i === blockedIndex) {
+                        card.classList.add('blocked');
+                        const inner = document.createElement('div');
+                        inner.className = 'card-inner';
+                        card.appendChild(inner);
+                    } else {
+                        const content = deck[deckIndex++];
+                        card.dataset.value = content; // Using the HTML string as value key is fine
+                        
+                        const inner = document.createElement('div');
+                        inner.className = 'card-inner';
+
+                        const front = document.createElement('div');
+                        front.className = 'card-front';
+                        front.innerHTML = content;
+                        
+                        // Adjust font size dynamically inside the elements
+                        const children = front.querySelectorAll('*');
+                        children.forEach(c => {
+                            let currentSize = parseFloat(c.style.fontSize) || 1; 
+                            // Only scale if it has em style
+                            if(c.style.fontSize && c.style.fontSize.includes('em')) {
+                                c.style.fontSize = (parseFloat(c.style.fontSize) * baseSize) + 'em';
+                            }
+                        });
+
+                        const back = document.createElement('div');
+                        back.className = 'card-back';
+                        back.innerText = "?";
+                        // Scale back question mark slightly with grid
+                        back.style.fontSize = (3 * baseSize) + "rem"; 
+
+                        inner.appendChild(front);
+                        inner.appendChild(back);
+                        card.appendChild(inner);
+
+                        card.onclick = () => this.flipCard(card);
+                    }
+                    this.gridEl.appendChild(card);
+                }
+            }
+
+            flipCard(card) {
+                if (this.isLocked) return;
+                if (card.classList.contains('flipped')) return;
+                if (card.classList.contains('matched')) return;
+
+                card.classList.add('flipped');
+                this.flippedCards.push(card);
+
+                if (this.flippedCards.length === 2) {
+                    this.attempts++;
+                    this.uiAttempts.innerText = this.attempts;
+                    this.checkForMatch();
+                }
+            }
+
+            checkForMatch() {
+                this.isLocked = true;
+                const [c1, c2] = this.flippedCards;
+                // Compare innerHTML for matching because value might contain unique IDs if we changed logic, but currently content string works
+                const match = c1.dataset.value === c2.dataset.value;
+
+                if (match) {
+                    this.handleMatch(c1, c2);
+                } else {
+                    this.unflipCards(c1, c2);
+                }
+            }
+
+            handleMatch(c1, c2) {
+                setTimeout(() => {
+                    c1.classList.add('matched');
+                    c2.classList.add('matched');
+                    this.matchedPairs++;
+                    this.flippedCards = [];
+                    this.isLocked = false;
+
+                    if (this.matchedPairs === this.totalPairs) {
+                        this.levelComplete();
+                    }
+                }, 500);
+            }
+
+            unflipCards(c1, c2) {
+                setTimeout(() => {
+                    c1.classList.remove('flipped');
+                    c2.classList.remove('flipped');
+                    this.flippedCards = [];
+                    this.isLocked = false;
+                }, 1000);
+            }
+
+            startTimer() {
+                this.stopTimer();
+                this.timer = setInterval(() => {
+                    this.seconds++;
+                    const m = Math.floor(this.seconds / 60).toString().padStart(2, '0');
+                    const s = (this.seconds % 60).toString().padStart(2, '0');
+                    this.uiTime.innerText = `${m}:${s}`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timer) clearInterval(this.timer);
+            }
+
+            levelComplete() {
+                this.stopTimer();
+                
+                const minAttempts = this.totalPairs;
+                const penaltyAttempts = Math.max(0, this.attempts - minAttempts);
+                const standardTime = this.totalPairs * 5; 
+                const penaltyTime = Math.max(0, this.seconds - standardTime);
+
+                let score = 100 - (penaltyAttempts * 2) - (penaltyTime * 0.5);
+                score = Math.floor(Math.max(1, Math.min(100, score)));
+
+                this.stats.push({
+                    level: this.level,
+                    time: this.seconds,
+                    attempts: this.attempts,
+                    score: score
+                });
+
+                document.getElementById('level-score').innerText = score;
+                document.getElementById('level-time').innerText = this.formatTime(this.seconds);
+                document.getElementById('level-attempts').innerText = this.attempts;
+                
+                const msg = document.getElementById('level-msg');
+                const nextBtn = document.getElementById('next-level-btn');
+                const statsBtn = document.getElementById('show-stats-btn');
+
+                if (this.level >= this.maxLevels) {
+                    msg.innerText = "Congratulations " + this.playerName + "! Game Over!";
+                    nextBtn.style.display = 'none';
+                    statsBtn.style.display = 'inline-block';
+                } else {
+                    msg.innerText = `Level ${this.level} Completed!`;
+                    nextBtn.style.display = 'inline-block';
+                    statsBtn.style.display = 'none';
+                }
+
+                this.levelModal.style.display = 'flex';
+                this.levelModal.classList.add('active');
+            }
+
+            nextLevel() {
+                if (this.level < this.maxLevels) {
+                    this.startLevel(this.level + 1);
+                }
+            }
+
+            showFinalStats() {
+                this.levelModal.style.display = 'none';
+                const body = document.getElementById('stats-body');
+                body.innerHTML = '';
+                
+                let totalTime = 0;
+                let totalMoves = 0;
+                let totalScore = 0;
+
+                this.stats.forEach(s => {
+                    totalTime += s.time;
+                    totalMoves += s.attempts;
+                    totalScore += s.score;
+
+                    const row = `<tr>
+                        <td>${s.level}</td>
+                        <td>${this.formatTime(s.time)}</td>
+                        <td>${s.attempts}</td>
+                        <td>${s.score}</td>
+                    </tr>`;
+                    body.innerHTML += row;
+                });
+
+                const avgScore = Math.round(totalScore / this.stats.length);
+                
+                const summaryRow = `<tr>
+                    <td>Total</td>
+                    <td>${this.formatTime(totalTime)}</td>
+                    <td>${totalMoves}</td>
+                    <td>Avg: ${avgScore}</td>
+                </tr>`;
+                body.innerHTML += summaryRow;
+
+                document.getElementById('final-avg-score').innerText = avgScore;
+                this.statsModal.style.display = 'flex';
+                this.statsModal.classList.add('active');
+            }
+
+            formatTime(secs) {
+                const m = Math.floor(secs / 60);
+                const s = secs % 60;
+                if (m > 0) return `${m}m ${s}s`;
+                return `${s}s`;
+            }
+        }
+
+        const game = new MemoryGame();
+
+    </script>
+</body>
+</html>
